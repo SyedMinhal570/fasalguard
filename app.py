@@ -592,8 +592,18 @@ def get_info(label):
 # ─── Model Loading ────────────────────────────────────────────────────────────
 @st.cache_resource(show_spinner=False)
 def load_model():
+    # NOTE: architecture below MUST exactly mirror the classifier used during
+    # training (Cell 3), otherwise load_state_dict() will fail with a
+    # size-mismatch / missing-key error. The trained checkpoint's classifier is:
+    #   Dropout(0.3) -> Linear(1280, 512) -> ReLU -> Dropout(0.2) -> Linear(512, 38)
     model = models.mobilenet_v2(weights=None)
-    model.classifier[1] = nn.Linear(model.last_channel, 38)
+    model.classifier = nn.Sequential(
+        nn.Dropout(p=0.3),
+        nn.Linear(model.last_channel, 512),
+        nn.ReLU(),
+        nn.Dropout(p=0.2),
+        nn.Linear(512, 38)
+    )
     checkpoint = torch.load("fasalguard_model.pth", map_location="cpu")
     model.load_state_dict(checkpoint["model_state_dict"])
     model.eval()
