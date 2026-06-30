@@ -6,6 +6,23 @@ import torchvision.transforms as transforms
 import torch.nn as nn
 import json, os, io, time
 
+def render_html(html_string):
+    """
+    Render multi-line HTML safely through st.markdown.
+
+    Why this exists: when a triple-quoted f-string is written inside nested
+    if/else blocks, every line inherits the Python source's indentation
+    (8, 12, 16+ spaces). Streamlit's markdown parser treats any line
+    indented 4+ spaces (especially after a blank line, which happens
+    whenever a conditional placeholder like {urgent_html} resolves to an
+    empty string) as a literal "indented code block" and prints the raw
+    HTML tags as plain text instead of rendering them. Stripping the
+    leading whitespace from every line before handing it to st.markdown
+    removes that trap entirely.
+    """
+    cleaned = "\n".join(line.lstrip() for line in html_string.split("\n"))
+    st.markdown(cleaned, unsafe_allow_html=True)
+
 st.set_page_config(
     page_title="FasalGuard 🌾",
     page_icon="🌾",
@@ -13,7 +30,7 @@ st.set_page_config(
     initial_sidebar_state="collapsed"
 )
 
-st.markdown("""
+render_html("""
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Playfair+Display:wght@700;800&display=swap');
 
@@ -301,7 +318,7 @@ div[data-testid="stMarkdownContainer"] p { color: #8ab88a; }
     .hero-section { padding: 2.5rem 1rem 2rem; }
 }
 </style>
-""", unsafe_allow_html=True)
+""")
 
 # ── Disease Knowledge Base ────────────────────────────────────────────────────
 DB = {
@@ -785,7 +802,7 @@ CROPS = [
 ]
 
 # ── HERO ──────────────────────────────────────────────────────────────────────
-st.markdown("""
+render_html("""
 <div class="hero-section">
     <div class="hero-badge">🌾 AI-Powered &nbsp;·&nbsp; 100% Free &nbsp;·&nbsp; Pakistan</div>
     <h1 class="hero-title">Fasal<span>Guard</span></h1>
@@ -799,7 +816,7 @@ st.markdown("""
         <div class="stat-item"><span class="stat-num">EN+UR</span><span class="stat-label">Bilingual</span></div>
     </div>
 </div>
-""", unsafe_allow_html=True)
+""")
 
 st.markdown('<div class="main-container">', unsafe_allow_html=True)
 
@@ -815,7 +832,7 @@ with col1:
         st.image(Image.open(uploaded), use_column_width=True, output_format="JPEG")
 
 with col2:
-    st.markdown("""
+    render_html("""
     <div class="how-card">
         <span class="section-label">How It Works &nbsp;·&nbsp; کیسے کام کرتا ہے</span>
         <div style="margin-top:1rem;">
@@ -835,7 +852,7 @@ with col2:
             </div>
         </div>
     </div>
-    """, unsafe_allow_html=True)
+    """)
 
 st.markdown("<br>", unsafe_allow_html=True)
 
@@ -851,6 +868,22 @@ if uploaded:
             st.error("Analysis error. Please try again with a clearer, close-up leaf photo.")
         else:
             label, confidence = results[0][0], results[0][1]
+
+            # FasalGuard's model is trained on the PlantVillage dataset, where
+            # every photo is a single leaf on a plain lab background. Real
+            # field/Google photos (whole branches, fruit, busy backgrounds)
+            # are out-of-distribution for it, so confidence drops sharply and
+            # predictions become unreliable. Rather than silently presenting
+            # a low-confidence guess as a confident diagnosis, warn the user
+            # and ask for a photo that matches what the model was trained on.
+            if confidence < 60:
+                st.warning(
+                    "⚠️ Low confidence (" + str(confidence) + "%) — this result may be unreliable. "
+                    "FasalGuard's AI was trained on close-up single-leaf photos with a plain background. "
+                    "Please retake the photo: one leaf only, fill the frame, natural light, no busy background. "
+                    "اعتماد کم ہے — براہ کرم صرف ایک پتے کی صاف، قریبی تصویر سادہ پس منظر کے ساتھ دوبارہ اپلوڈ کریں۔"
+                )
+
             info = get_info(label)
             is_healthy = info["sev"] == "None"
             sev = info["sev"]
@@ -858,7 +891,7 @@ if uploaded:
             sev_class, sev_icon = sev_map.get(sev, ("sev-low","🟢"))
 
             if is_healthy:
-                st.markdown(f"""
+                render_html(f"""
                 <div class="result-card">
                     <div class="result-header">
                         <div style="flex:1;">
@@ -888,7 +921,7 @@ if uploaded:
                         </div>
                     </div>
                 </div>
-                """, unsafe_allow_html=True)
+                """)
 
             else:
                 urgent_html = ""
@@ -899,7 +932,7 @@ if uploaded:
                         <div class="alert-text"><strong>Urgent Action Required!</strong> This disease can cause significant crop loss if not treated immediately. Follow the treatment plan below today.</div>
                     </div>"""
 
-                st.markdown(f"""
+                render_html(f"""
                 <div class="result-card">
                     <div class="result-header">
                         <div style="flex:1;">
@@ -925,7 +958,7 @@ if uploaded:
                             <div class="info-block"><div class="ib-label">Economic Risk</div><div class="ib-val" style="font-size:0.85rem;">{info['econ']}</div></div>
                         </div>
                         <hr class="divider">
-                """, unsafe_allow_html=True)
+                """)
 
                 if info['symptoms']:
                     st.markdown('<div class="list-section"><h4>Observed Symptoms · علامات</h4>', unsafe_allow_html=True)
@@ -951,36 +984,36 @@ if uploaded:
                     for alt_label, alt_conf in results[1:]:
                         alt_info = get_info(alt_label)
                         alt_html += f'<div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid #1a3a1a;"><span style="font-size:0.82rem;color:#8ab88a;">{alt_info["en"]}</span><span style="font-size:0.78rem;color:#4a6f4a;font-weight:600;">{alt_conf}%</span></div>'
-                    st.markdown(f"""
+                    render_html(f"""
                     <hr class="divider">
                     <div style="margin-bottom:1rem;">
                         <div style="font-size:0.65rem;color:#4ade80;text-transform:uppercase;letter-spacing:1.5px;font-weight:800;margin-bottom:0.7rem;">Alternative Possibilities · دیگر ممکنہ تشخیص</div>
                         {alt_html}
                     </div>
-                    """, unsafe_allow_html=True)
+                    """)
 
-                st.markdown(f"""
+                render_html(f"""
                         <div class="urdu-block">
                             <div class="urdu-title">اردو خلاصہ</div>
                             <div class="urdu-text">{info['cause_ur']}<br><br>{info['ur_sum']}<br><br><strong style="color:#4ade80;font-size:1.05rem;">{info['ur_urgency']}</strong></div>
                         </div>
                     </div>
                 </div>
-                """, unsafe_allow_html=True)
+                """)
 
 else:
-    st.markdown("""
+    render_html("""
     <div style="text-align:center;padding:5rem 1rem;">
         <div style="font-size:5rem;margin-bottom:1.2rem;opacity:0.25;">🌾</div>
         <div style="font-size:1.1rem;color:#3a5a3a;margin-bottom:0.5rem;font-weight:600;">Upload a crop photo to begin analysis</div>
         <div style="font-size:0.9rem;color:#2a4a2a;">تصویر اپلوڈ کریں اور شروع کریں</div>
         <div style="margin-top:1.5rem;font-size:0.78rem;color:#1a3a1a;">For best results: close-up photo of a single affected leaf in natural daylight</div>
     </div>
-    """, unsafe_allow_html=True)
+    """)
 
 st.markdown('</div>', unsafe_allow_html=True)
 
-st.markdown("""
+render_html("""
 <div class="footer-section">
     <div class="footer-text">
         <strong style="color:#3a5a3a;font-size:0.82rem;">FasalGuard</strong> &nbsp;·&nbsp; Pakistan's AI Crop Health Platform &nbsp;·&nbsp; پاکستان کا پہلا AI فصل صحت پلیٹ فارم<br>
@@ -991,4 +1024,4 @@ st.markdown("""
         </span>
     </div>
 </div>
-""", unsafe_allow_html=True)
+""")
